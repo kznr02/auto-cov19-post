@@ -4,6 +4,8 @@ use reqwest::Client;
 use serde_json::value::Value;
 use std::collections::HashMap;
 use std::fmt;
+use std::thread;
+use std::time;
 
 async fn json_read(path: &str) -> serde_json::Value {
     let file = std::fs::File::open(path).unwrap();
@@ -171,12 +173,18 @@ async fn main() {
                     10016 =>    println!("错误次数已达最大上限,请稍后再试"),
                     _ | 0 => {
                         println!("登陆成功，正在打卡");
-                        if let Ok(resp) = sign(&client, &userName, &passWord).await {
-                            match resp.get("e").unwrap().as_i64().unwrap() {
-                                1 => println!("今天已签到或位置信息为空"),
-                                _ | 0 => println!("打卡成功"),
+                        let mut resp = sign(&client, &userName, &passWord).await.unwrap();
+                        loop {
+                            if resp.get("m").unwrap() == "定位信息不能为空" {
+                                println!("打卡失败正在重试");
+                                std::thread::sleep(time::Duration::from_secs(1));
+                                resp = sign(&client, &userName, &passWord).await.unwrap();
+                            }
+                            else {
+                                break;
                             }
                         }
+                        println!("打卡成功");
                     }
                 }
             }
